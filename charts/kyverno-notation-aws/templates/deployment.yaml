@@ -71,7 +71,7 @@ spec:
             fieldRef:
               fieldPath: metadata.name
         - name: AWS_REGION
-          value: us-west-2
+          value: {{ .Values.region }}
         - name: DEFAULT_TRUST_POLICY
           value: aws-signer-trust-policy
         volumeMounts:

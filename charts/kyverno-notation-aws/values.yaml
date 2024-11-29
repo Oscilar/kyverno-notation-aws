@@ -1,3 +1,5 @@
+region: us-east-2
+
 # -- (string) Override the name of the chart
 nameOverride: ~
 

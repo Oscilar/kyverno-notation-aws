@@ -35,7 +35,7 @@ jobs:
       
       - name: Set Image name
         run: |
-          echo IMAGE_NAME="ghcr.io/nirmata/kyverno-notation-aws:latest" >> $GITHUB_ENV
+          echo 'IMAGE_NAME=ghcr.io/nirmata/kyverno-notation-aws:latest' >> "$GITHUB_ENV"
 
       - name: Scan image using grype
         id: grype-scan

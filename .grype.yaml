@@ -1,0 +1,6 @@
+ignore:
+  - package:
+      name: stdlib
+      type: go-module
+      location: "/plugins/com.amazonaws.signer.notation.plugin/notation-com.amazonaws.signer.notation.plugin"
+    reason: "AWS signer plugin is downloaded as an external binary; track plugin runtime remediation separately from app dependencies."

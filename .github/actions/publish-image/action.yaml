@@ -58,11 +58,7 @@ runs:
         COSIGN_REPOSITORY: ${{ inputs.sbom-repository }}
       run: |
         set -euo pipefail
-        # Determine tags input: prefer image-tags, fallback to image-tag
         TAGS_INPUT="${{ inputs.image-tags }}"
-        if [ -z "${TAGS_INPUT}" ]; then
-          TAGS_INPUT="${{ inputs.image-tag }}"
-        fi
         # Normalize and split into array
         TAGS_INPUT=$(echo "${TAGS_INPUT}" | tr -d ' ')
         IFS=',' read -r -a TAGS <<< "${TAGS_INPUT}"

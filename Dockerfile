@@ -1,4 +1,4 @@
-ARG BUILDER_IMAGE="golang:1.25.9-alpine3.22"
+ARG BUILDER_IMAGE="golang:1.26.4-alpine3.22"
 
 FROM --platform=$BUILDPLATFORM $BUILDER_IMAGE AS builder
 

@@ -6,11 +6,30 @@ metadata:
   labels:
     app.kubernetes.io/name: MyApp
 spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: myapp-container
     image: 844333597536.dkr.ecr.us-west-2.amazonaws.com/kyverno-demo:v1
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
   initContainers:
   - name: init-myservice
     image: busybox:1.28
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
   - name: init-mydb
     image: busybox:1.28
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL

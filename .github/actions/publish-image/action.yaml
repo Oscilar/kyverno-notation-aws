@@ -56,9 +56,12 @@ runs:
         REPO: ${{ inputs.repository }}
         REGISTRY_PASSWORD: ${{ inputs.registry-password }}
         COSIGN_REPOSITORY: ${{ inputs.sbom-repository }}
+        MAKEFILE_TARGET: ${{ inputs.makefile-target }}
+        GITHUB_REPOSITORY_NAME: ${{ github.repository }}
+        IMAGE_TAGS_INPUT: ${{ inputs.image-tags }}
       run: |
         set -euo pipefail
-        TAGS_INPUT="${{ inputs.image-tags }}"
+        TAGS_INPUT="${IMAGE_TAGS_INPUT}"
         # Normalize and split into array
         TAGS_INPUT=$(echo "${TAGS_INPUT}" | tr -d ' ')
         IFS=',' read -r -a TAGS <<< "${TAGS_INPUT}"
@@ -69,18 +72,18 @@ runs:
         fi
         export IMAGE_TAG="${PRIMARY_TAG}"
         echo "Building and publishing primary tag: ${IMAGE_TAG}"
-        make ${{ inputs.makefile-target }}
+        make "${MAKEFILE_TARGET}"
         # Compute digest from the primary tag
-        DIGEST=$(crane digest ghcr.io/${{ github.repository }}:${PRIMARY_TAG})
+        DIGEST=$(crane digest "ghcr.io/${GITHUB_REPOSITORY_NAME}:${PRIMARY_TAG}")
         echo "Primary digest: ${DIGEST}"
-        echo "digest=ghcr.io/${{ github.repository }}@${DIGEST}" >> $GITHUB_OUTPUT
+        echo "digest=ghcr.io/${GITHUB_REPOSITORY_NAME}@${DIGEST}" >> "$GITHUB_OUTPUT"
         # Apply additional tags to the same digest
         if [ ${#TAGS[@]} -gt 1 ]; then
           for t in "${TAGS[@]}"; do
             [ -z "$t" ] && continue
             if [ "$t" != "$PRIMARY_TAG" ]; then
               echo "Tagging digest ${DIGEST} as: $t"
-              crane tag ghcr.io/${{ github.repository }}@${DIGEST} "$t"
+              crane tag "ghcr.io/${GITHUB_REPOSITORY_NAME}@${DIGEST}" "$t"
             fi
           done
         fi
@@ -96,22 +99,30 @@ runs:
       if: ${{ inputs.sign-image == 'true' }}
       env:
         COSIGN_REPOSITORY: ${{ inputs.signature-repository }}
+        IMAGE_DIGEST: ${{ steps.docker-publish.outputs.digest }}
+        GITHUB_REPOSITORY_NAME: ${{ github.repository }}
+        GITHUB_WORKFLOW_NAME: ${{ github.workflow }}
+        GITHUB_SHA_VALUE: ${{ github.sha }}
       run: |
         set -e
         cosign sign --yes \
-          -a "repo=${{ github.repository }}" \
-          -a "workflow=${{ github.workflow }}" \
-          -a "ref=${{ github.sha }}" \
-          ${{ steps.docker-publish.outputs.digest }}
+          -a "repo=${GITHUB_REPOSITORY_NAME}" \
+          -a "workflow=${GITHUB_WORKFLOW_NAME}" \
+          -a "ref=${GITHUB_SHA_VALUE}" \
+          "${IMAGE_DIGEST}"
     - shell: bash
       env:
         COSIGN_REPOSITORY: ${{ inputs.sbom-repository }}
+        SBOM_NAME: ${{ inputs.sbom-name }}
+        IMAGE_DIGEST: ${{ steps.docker-publish.outputs.digest }}
       run: |
-        cosign attach sbom --sbom ./${{ inputs.sbom-name }}-bom.cdx.json --type cyclonedx ${{ steps.docker-publish.outputs.digest }}
+        cosign attach sbom --sbom "./${SBOM_NAME}-bom.cdx.json" --type cyclonedx "${IMAGE_DIGEST}"
     - shell: bash
       id: digest
+      env:
+        IMAGE_DIGEST: ${{ steps.docker-publish.outputs.digest }}
       run: |
-        echo "The image generated is: ${{ steps.docker-publish.outputs.digest }}"
-        DIGEST=$(echo ${{ steps.docker-publish.outputs.digest }} | cut -d '@' -f2)
+        echo "The image generated is: ${IMAGE_DIGEST}"
+        DIGEST=$(echo "${IMAGE_DIGEST}" | cut -d '@' -f2)
         echo "Digest from image is: $DIGEST"
-        echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+        echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"

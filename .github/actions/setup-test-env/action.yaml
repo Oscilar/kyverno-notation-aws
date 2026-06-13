@@ -23,7 +23,9 @@ runs:
         large-packages: false
         swap-storage: false
     - shell: bash
+      env:
+        KIND_VERSION: ${{ inputs.version }}
       run: |
-        export KIND_IMAGE=kindest/node:${{ inputs.version }}
+        export KIND_IMAGE="kindest/node:${KIND_VERSION}"
         make kind-create-cluster kind-deploy-image
     - uses: ./.github/actions/kyverno-notation-aws-wait-ready

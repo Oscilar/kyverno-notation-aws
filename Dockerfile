@@ -31,4 +31,5 @@ ENV PLUGINS_DIR=/plugins
 COPY --from=builder notation-com.amazonaws.signer.notation.plugin plugins/com.amazonaws.signer.notation.plugin/notation-com.amazonaws.signer.notation.plugin
 
 COPY --from=builder kyverno-notation-aws kyverno-notation-aws
+USER nonroot:nonroot
 ENTRYPOINT ["/kyverno-notation-aws"]

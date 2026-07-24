@@ -19,7 +19,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/kyverno/kyverno/pkg/leaderelection"
 	"github.com/kyverno/pkg/certmanager"
-	tlsMgr "github.com/kyverno/pkg/tls"
+	certificates "github.com/kyverno/pkg/tls"
 	"github.com/nirmata/kyverno-notation-verifier/kubenotation"
 	knvSetup "github.com/nirmata/kyverno-notation-verifier/setup"
 	knvVerifier "github.com/nirmata/kyverno-notation-verifier/verifier"
@@ -108,17 +108,16 @@ func main() {
 	signalCtx, sdown := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer sdown()
 
-	tlsMgrConfig := &tlsMgr.Config{
-		ServiceName: ServiceName,
-		Namespace:   Namespace,
-	}
+	var certConfig certificates.Config
+	certConfig.ServiceName = ServiceName
+	certConfig.Namespace = Namespace
 
 	caStopCh := make(chan struct{}, 1)
-	caInformer := NewSecretInformer(kubeClient, Namespace, tlsMgr.GenerateRootCASecretName(tlsMgrConfig), resyncPeriod)
+	caInformer := NewSecretInformer(kubeClient, Namespace, certificates.GenerateRootCASecretName(&certConfig), resyncPeriod)
 	go caInformer.Informer().Run(caStopCh)
 
 	tlsStopCh := make(chan struct{}, 1)
-	tlsInformer := NewSecretInformer(kubeClient, Namespace, tlsMgr.GenerateTLSPairSecretName(tlsMgrConfig), resyncPeriod)
+	tlsInformer := NewSecretInformer(kubeClient, Namespace, certificates.GenerateTLSPairSecretName(&certConfig), resyncPeriod)
 	go tlsInformer.Informer().Run(tlsStopCh)
 
 	le, err := leaderelection.New(
@@ -130,14 +129,14 @@ func main() {
 		2*time.Second,
 		func(ctx context.Context) {
 
-			certRenewer := tlsMgr.NewCertRenewer(
+			certRenewer := certificates.NewCertRenewer(
 				zapr.NewLogger(logger).WithName("tls").WithValues("pod", PodName),
 				kubeClient.CoreV1().Secrets(Namespace),
 				CertRenewalInterval,
 				CAValidityDuration,
 				TLSValidityDuration,
 				"",
-				tlsMgrConfig,
+				&certConfig,
 			)
 
 			certManager := certmanager.NewController(
@@ -145,7 +144,7 @@ func main() {
 				caInformer,
 				tlsInformer,
 				certRenewer,
-				tlsMgrConfig,
+				&certConfig,
 			)
 
 			leaderControllers := []Controller{NewController("cert-manager", certManager, 1)}
@@ -210,15 +209,24 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/checkimages", verifier.HandleCheckImages)
 	errsHTTP := make(chan error, 1)
+	httpSrv := &http.Server{
+		Addr:              ":9080",
+		Handler:           mux,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		ReadHeaderTimeout: 30 * time.Second,
+		IdleTimeout:       1 * time.Minute,
+	}
 	go func() {
-		errsHTTP <- http.ListenAndServe(":9080", mux)
+		errsHTTP <- httpSrv.ListenAndServe()
 	}()
 
 	errsTLS := make(chan error, 1)
 	if !flagNoTLS {
 		tlsConf := &tls.Config{
+			MinVersion: tls.VersionTLS12,
 			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-				secret, err := tlsInformer.Lister().Secrets(tlsMgrConfig.Namespace).Get(tlsMgr.GenerateTLSPairSecretName(tlsMgrConfig))
+				secret, err := tlsInformer.Lister().Secrets(certConfig.Namespace).Get(certificates.GenerateTLSPairSecretName(&certConfig))
 				if err != nil {
 					return nil, err
 				} else if secret == nil {
